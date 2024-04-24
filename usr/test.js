@@ -30,3 +30,14 @@ async function test2() {
         console.log(response);
     });
 }
+async function test3() {
+    let url = '/snowday'
+    o = await fetch(url, {
+        method: 'OPTIONS',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+    }).then(response => {
+        console.log(response);
+    });
+}

@@ -2,8 +2,8 @@ use json::{self, JsonValue};
 use std::fs;
 use std::io::{prelude::*, BufReader};
 use std::net::{TcpListener, TcpStream};
-use threadpool::ThreadPool;
 use std::path::Path;
+use threadpool::ThreadPool;
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:3000").unwrap();
     let pool = ThreadPool::new(4);
@@ -17,27 +17,41 @@ fn main() {
 fn handle(stream: TcpStream) {
     let request = Request::new(stream.try_clone().unwrap());
     println!("Request line: {:?}", request.req_line);
+    let mut response = process(request);
+    response.send(&stream);
+}
+fn process(request: Request) -> Response {
     let mut response = Response::new();
-
     if request.req_line == "GET /" {
         response.get(
             "HTTP/1.1 200 OK".to_string(),
             fs::read_to_string("usr/test.html").unwrap(),
             "text/html".to_string(),
         );
-    } else if request.req_line == "GET /snowday" {
+    }
+    if request.req_line == "GET /snowday" {
         response.get(
             "HTTP/1.1 200 OK".to_string(),
             fs::read_to_string("usr/snowday.html").unwrap(),
             "text/html".to_string(),
         );
-    } else if request.req_line == "GET /snowday.js" {
+    }
+    if request.req_line == "GET /snowday.js" {
         response.get(
             "HTTP/1.1 200 OK".to_string(),
             fs::read_to_string("usr/snowday.js").unwrap(),
             "application/javascript".to_string(),
         );
-    } else if request.req_line == "POST /snowday" {
+    }
+    if request.req_line == "POST /snowday" {
+        if request.body == JsonValue::Null {
+            response.get(
+                "HTTP/1.1 400 BAD REQUEST".to_string(),
+                "400 BAD REQUEST".to_string(),
+                "text/html".to_string(),
+            );
+            return response;
+        }
         response.status = "HTTP/1.1 200 OK".to_string().to_owned();
         let parsed = request.body.clone();
         let zipcode: usize = parsed["zipcode"].to_string().parse().unwrap();
@@ -50,9 +64,17 @@ fn handle(stream: TcpStream) {
         );
         response.content_type = "application/json".to_string();
         response.len = response.contents.to_string().len().to_string();
-    } else if request.req_line == "POST /snowday_latlong" {
+    }
+    if request.req_line == "POST /snowday_latlong" {
+        if request.body == JsonValue::Null {
+            response.get(
+                "HTTP/1.1 400 BAD REQUEST".to_string(),
+                "400 BAD REQUEST".to_string(),
+                "text/html".to_string(),
+            );
+            return response;
+        }
         response.status = "HTTP/1.1 200 OK".to_string().to_owned();
-
         let parsed = request.body.clone();
         let lat: f64 = parsed["lat"].to_string().parse().unwrap();
         let lng: f64 = parsed["lng"].to_string().parse().unwrap();
@@ -65,15 +87,16 @@ fn handle(stream: TcpStream) {
                 .block_on(async { get_snow_day_chances(lat as u32, lng as u32).await.unwrap() }),
         );
         response.content_type = "application/json".to_string();
-    } else if request.req_line == "GET /favicon.ico" {
+    }
+    if request.req_line == "GET /favicon.ico" {
         response.status = "HTTP/1.1 200 OK".to_string().to_owned();
-    } else if request.req_line == "PUT /waow.html" {
+    }
+    if request.req_line == "PUT /waow.html" {
         if request
             .headers
             .contains(&"Password: transrights\r\n".to_string())
             && request.body != JsonValue::Null
         {
-            // fs::write("file/waow.html", request.body["contents"].to_string()).unwrap();
             response.put(
                 "HTTP/1.1 200 OK".to_string(),
                 "OK".to_string(),
@@ -89,19 +112,22 @@ fn handle(stream: TcpStream) {
                 "text/html".to_string(),
             );
         }
-    } else if request.req_line == "GET /test.js" {
+    }
+    if request.req_line == "GET /test.js" {
         response.get(
             "HTTP/1.1 200 OK".to_string(),
             fs::read_to_string("usr/test.js").unwrap(),
             "application/javascript".to_string(),
         );
-    } else if request.req_line == "HEAD /snowday" {
+    }
+    if request.req_line == "HEAD /snowday" {
         response.head(
             "HTTP/1.1 200 OK".to_string(),
             fs::read_to_string("usr/snowday.html").unwrap(),
             "text/html".to_string(),
         );
-    } else if request.req_line == "DELETE /waow.html" {
+    }
+    if request.req_line == "DELETE /waow.html" {
         if request
             .headers
             .contains(&"Password: transrights\r\n".to_string())
@@ -115,10 +141,12 @@ fn handle(stream: TcpStream) {
             );
         }
     }
-
-    response.send(&stream);
+    if request.req_line == "OPTIONS /snowday" {
+        response.options("/snowday".to_string(), &request.headers[0]);
+        
+    }
+    return response;
 }
-
 struct Request {
     headers: Vec<String>,
     body: JsonValue,
@@ -228,11 +256,34 @@ impl Response {
             self.content_type = "text/html".to_string();
             self.len = "".len().to_string();
         } else {
-            self.status = "HTTP/1.1 404 NOT FOUND".to_string();
-            self.contents = Content::StringContent("404 ".to_owned() + file_path.as_str() + " not found!");
+            self.status = "HTTP/1.1 410 GONE".to_string();
+            self.contents =
+                Content::StringContent("410 ".to_owned() + file_path.as_str() + " not found!");
             self.len = self.contents.to_string().len().to_string();
             self.content_type = "text/html".to_string();
         }
+    }
+    fn options(&mut self, path: String, header: &String) {
+        if header == "WARNING: THIS IS A TEST" {
+            self.status = "HTTP/1.1 204 No Content".to_string();
+            return;
+        }
+        let options = vec!["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"];
+        let mut allowed: Vec<String> = vec![];
+        for i in options {
+            let a = Request {
+                headers: vec!["WARNING: THIS IS A TEST".to_string()],
+                body: JsonValue::Null,
+                req_line: i.to_string() + " " + path.as_str(),
+            };
+            if process(a).status != "HTTP/1.1 404 NOT FOUND" {
+                allowed.push(i.to_string());
+            }
+        }
+        self.status = "HTTP/1.1 200 OK".to_string();
+        self.contents = Content::StringContent(allowed.join(", "));
+        self.len = self.contents.to_string().len().to_string();
+        self.content_type = "text/html".to_string();
     }
     fn send(&mut self, mut stream: &TcpStream) {
         match self.contents {
