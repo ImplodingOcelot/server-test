@@ -3,7 +3,6 @@ use std::fs;
 use std::io::{prelude::*, BufReader};
 use std::net::TcpStream;
 use std::path::Path;
-mod main;
 pub struct Request {
     pub headers: Vec<String>,
     pub body: JsonValue,
@@ -120,28 +119,28 @@ impl Response {
             self.content_type = "text/html".to_string();
         }
     }
-    pub fn options(&mut self, path: String, header: &String) {
-        if header == "WARNING: THIS IS A TEST" {
-            self.status = "HTTP/1.1 204 No Content".to_string();
-            return;
-        }
-        let options = vec!["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"];
-        let mut allowed: Vec<String> = vec![];
-        for i in options {
-            let a = Request {
-                headers: vec!["WARNING: THIS IS A TEST".to_string()],
-                body: JsonValue::Null,
-                req_line: i.to_string() + " " + path.as_str(),
-            };
-            if process(a).status != "HTTP/1.1 404 NOT FOUND" {
-                allowed.push(i.to_string());
-            }
-        }
-        self.status = "HTTP/1.1 200 OK".to_string();
-        self.contents = Content::StringContent(allowed.join(", "));
-        self.len = self.contents.to_string().len().to_string();
-        self.content_type = "text/html".to_string();
-    }
+    // pub fn options(&mut self, path: String, header: &String) {
+    //     if header == "WARNING: THIS IS A TEST" {
+    //         self.status = "HTTP/1.1 204 No Content".to_string();
+    //         return;
+    //     }
+    //     let options = vec!["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"];
+    //     let mut allowed: Vec<String> = vec![];
+    //     for i in options {
+    //         let a = Request {
+    //             headers: vec!["WARNING: THIS IS A TEST".to_string()],
+    //             body: JsonValue::Null,
+    //             req_line: i.to_string() + " " + path.as_str(),
+    //         };
+    //         if process(a).status != "HTTP/1.1 404 NOT FOUND" {
+    //             allowed.push(i.to_string());
+    //         }
+    //     }
+    //     self.status = "HTTP/1.1 200 OK".to_string();
+    //     self.contents = Content::StringContent(allowed.join(", "));
+    //     self.len = self.contents.to_string().len().to_string();
+    //     self.content_type = "text/html".to_string();
+    // }
     pub fn send(&mut self, mut stream: &TcpStream) {
         match self.contents {
             Content::StringContent(_) => {
