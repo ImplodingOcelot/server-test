@@ -19,12 +19,14 @@ fn main() {
         });
     }
 }
+
 fn handle(stream: TcpStream) {
     let request = Request::new(stream.try_clone().unwrap());
     println!("Request line: {:?}", request.req_line);
     let mut response = process(request);
     response.send(&stream);
 }
+
 fn process(request: Request) -> Response {
     let mut response = Response::new();
     if request.req_line == "GET /" {
@@ -146,14 +148,9 @@ fn process(request: Request) -> Response {
             );
         }
     }
-    // if request.req_line == "OPTIONS /snowday" {
-    //     response.options("/snowday".to_string(), &request.headers[0]);
+    if request.req_line == "OPTIONS /snowday" {
+        response.options("/snowday".to_string(), &request.headers[0], process);
         
-    // }
+    }
     return response;
 }
-
-
-
-
-
